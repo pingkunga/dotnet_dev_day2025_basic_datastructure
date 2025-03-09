@@ -2,7 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
-
+using BenchmarkDotNet.Attributes;
+using BenchmarkDotNet.Running;
+using Perfolizer.Mathematics.SignificanceTesting;
 public class TransactionDTO
 {
     public int TransactionId { get; set; }
@@ -27,11 +29,32 @@ public class PortPriceSouceDTO
 
 public class Program
 {
+    /// <summary>
+    ///  run with dotnet run -c Release
+    /// </summary>
+    /// <param name="args"></param>
     public static void Main(string[] args)
     {
-		int portfolio_num = 5000; //500, 1000 , 1500, 2000
+        var summary = BenchmarkRunner.Run<BenchmarkListVSDictionaryTest>();
+    }
+}
+
+public class BenchmarkListVSDictionaryTest
+{
+    private List<TransactionDTO> transactions;
+    private List<PortfolioDTO> portfolios;
+    private List<PortPriceSouceDTO> portPriceSources;
+    private	IDictionary<int,  PortfolioDTO> portDic;
+	private	IDictionary<int,  PortPriceSouceDTO> portPriceSourceDic;
+    
+    [Params(500, 1000, 5000, 10000)]
+    public int portfolio_num = 500; //500, 1000 , 1500, 2000
+
+    [GlobalSetup]
+    public void Setup()
+    {
         // Mocking 1 million transactions
-        List<TransactionDTO> transactions = new List<TransactionDTO>();
+        transactions = new List<TransactionDTO>();
         for (int i = 0; i < 1000000; i++)
         {
             transactions.Add(new TransactionDTO
@@ -44,7 +67,7 @@ public class Program
         }
 
         // Mocking portfolios
-        List<PortfolioDTO> portfolios = new List<PortfolioDTO>();
+        portfolios = new List<PortfolioDTO>();
         for (int i = 0; i < portfolio_num; i++)
         {
             portfolios.Add(new PortfolioDTO
@@ -55,7 +78,7 @@ public class Program
         }
 		
 		//Mocking priceSources
-		List<PortPriceSouceDTO> portPriceSources = new List<PortPriceSouceDTO>();
+		portPriceSources = new List<PortPriceSouceDTO>();
 		for (int i = 0; i < portfolio_num; i++)
         {
             portPriceSources.Add(new PortPriceSouceDTO
@@ -67,28 +90,18 @@ public class Program
             });
         }
 
-		// Start the stopwatch to measure the process time
-        Stopwatch stopwatch = new Stopwatch();
-        stopwatch.Start();
-        ProcessTransactionWithOnlyList(transactions, portfolios, portPriceSources);
-        // Stop the stopwatch and print the elapsed time
-        stopwatch.Stop();
-        Console.WriteLine($"ProcessUseOnlyList Time: {stopwatch.ElapsedMilliseconds} ms");
-		
-		
-		IDictionary<int,  PortfolioDTO> portDic = portfolios.ToDictionary(x => x.PortfolioId, x => x);
-		IDictionary<int,  PortPriceSouceDTO> portPriceSourceDic = portPriceSources.ToDictionary(x => x.PortfolioId, x => x);
-		stopwatch.Reset();
-		stopwatch.Start();
-		ProcessTransactionWithListAndDic(transactions, portDic, portPriceSourceDic);
-		stopwatch.Stop();
-        Console.WriteLine($"ProcessTransactionWithListAndDic Time: {stopwatch.ElapsedMilliseconds} ms");
+        // Create dictionary from list
+        portDic = portfolios.ToDictionary(p => p.PortfolioId);
+        portPriceSourceDic = portPriceSources.ToDictionary(p => p.PortfolioId);
     }
-	
-    public static void ProcessTransactionWithOnlyList(IList<TransactionDTO> pTransactions, IList<PortfolioDTO> pPortfolios, IList<PortPriceSouceDTO> pPortPriceSources)
+
+    [Benchmark]
+    public IList<TransactionDTO> TestProcessTransactionWithOnlyList () => ProcessTransactionWithOnlyList(transactions, portfolios, portPriceSources);
+    [Benchmark]
+    public IList<TransactionDTO> TestProcessTransactionWithListAndDic () => ProcessTransactionWithListAndDic(transactions, portDic, portPriceSourceDic);
+
+    public static IList<TransactionDTO> ProcessTransactionWithOnlyList(IList<TransactionDTO> pTransactions, IList<PortfolioDTO> pPortfolios, IList<PortPriceSouceDTO> pPortPriceSources)
 	{
-		//PortfolioList.ToDictionary(x => x.PortfolioId.GetValueOrDefault(0), x => x);
-        // Iterate through transactions and find corresponding portfolio
         foreach (var transaction in pTransactions)
         {
             // Use LINQ to find the portfolio with the matching PortfolioId
@@ -106,10 +119,12 @@ public class Program
                 //....
             }
         }
+
+        return pTransactions;
 		
 	}
-	
-	public static void ProcessTransactionWithListAndDic(IList<TransactionDTO> pTransactions, IDictionary<int,  PortfolioDTO> pPortDic, IDictionary<int,  PortPriceSouceDTO> pPortPriceSourceDic)
+
+	public IList<TransactionDTO> ProcessTransactionWithListAndDic(IList<TransactionDTO> pTransactions, IDictionary<int,  PortfolioDTO> pPortDic, IDictionary<int,  PortPriceSouceDTO> pPortPriceSourceDic)
 	{
 		foreach (var transaction in pTransactions)
         {
@@ -127,5 +142,7 @@ public class Program
                 //....
             }
         }
+
+        return pTransactions;
 	}
 }
